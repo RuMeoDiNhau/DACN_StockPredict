@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Dự Báo Chứng Khoán AI{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Sidebar -->
+    <div class="col-md-3">
+        <div class="card h-100">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-list"></i> Mã cổ phiếu
+                </h5>
+            </div>
+            <div class="card-body p-2">
+                <div class="mb-3">
+                    <input type="text" class="form-control" id="symbol-search" placeholder="Tìm mã cổ phiếu...">
+                </div>
+                <div class="list-group list-group-flush" id="symbols-list">
+                    {% for symbol in symbols %}
+                    <a href="#" class="list-group-item list-group-item-action symbol-item" 
+                       data-symbol="{{ symbol }}">
+                        <div class="d-flex justify-content-between">
+                            <span>{{ symbol }}</span>
+                            <small class="text-muted price-{{ symbol }}">--</small>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="col-md-9">
+        <!-- Market Overview -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6>VN-INDEX</h6>
+                                <h4 id="vnindex-value">--</h4>
+                            </div>
+                            <i class="fas fa-chart-line fa-2x opacity-50"></i>
+                        </div>
+                        <small id="vnindex-change">--</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6>HNX-INDEX</h6>
+                                <h4 id="hnxindex-value">--</h4>
+                            </div>
+                            <i class="fas fa-chart-bar fa-2x opacity-50"></i>
+                        </div>
+                        <small id="hnxindex-change">--</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <h6>Dự báo hôm nay</h6>
+                                <h4 id="predictions-count">--</h4>
+                            </div>
+                            <i class="fas fa-brain fa-2x opacity-50"></i>
+                        </div>
+                        <small>Mã cổ phiếu được phân tích</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Area -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-area"></i>
+                        Biểu đồ giá: <span id="current-symbol">VHM</span>
+                    </h5>
+                    <div class="btn-group" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-period="7">7 ngày</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm active" data-period="30">30 ngày</button>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-period="90">90 ngày</button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <canvas id="price-chart" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- Predictions and Analysis -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-crystal-ball"></i>
+                            Dự báo mới nhất
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="latest-predictions">
+                            <div class="text-center text-muted py-4">
+                                Chọn mã cổ phiếu để xem dự báo
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-newspaper"></i>
+                            Tin tức mới nhất
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="latest-news">
+                            <div class="text-center text-muted py-4">
+                                Đang tải tin tức...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

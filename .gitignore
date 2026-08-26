@@ -1,6 +1,85 @@
-.env
+# Python
 __pycache__/
-*.pyc
-.vscode/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+# Data files
+data/raw/*.csv
+data/raw/*.json
+data/processed/
+
+# Models
+models/trained/*.h5
+models/trained/*.pkl
+models/trained/*.joblib
+
+# Logs
+logs/*.log
+*.log
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Config files with sensitive data
+config/secrets.py
+.env
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# API keys and secrets
+*api_key*
+*secret*
+*password*
+
+# Backup files
+*.bak
+*.backup
