@@ -65,3 +65,20 @@ class Config:
     
     # ==================== CẤU HÌNH SCHEDULER ====================
     ENABLE_SCHEDULER = True  # Bật/tắt background tasks
+
+
+class TestingConfig(Config):
+    """Cấu hình nhẹ và an toàn cho bộ kiểm thử."""
+
+    TESTING = True
+    DEBUG = False
+    SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+    ENABLE_AI_AGENT = False
+    ENABLE_SCHEDULER = False
+
+
+def get_config():
+    """Trả về cấu hình theo biến môi trường hiện tại."""
+    if os.environ.get('FLASK_ENV') == 'testing':
+        return TestingConfig
+    return Config

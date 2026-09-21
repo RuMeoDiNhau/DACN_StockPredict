@@ -1,7 +1,7 @@
 # Ứng Dụng AI Agent Và LLM Vào Dự Báo Giá Chứng Khoán
 
 ## 📋 Mô tả dự án
-Đây là đồ án chuyên ngành của sinh viên năm 3 khoa Khoa học Máy tính, Đại học Bách Khoa. Dự án phát triển một ứng dụng web dự báo giá chứng khoán Việt Nam sử dụng AI Agent và Large Language Model (LLM) để phân tích dữ liệu từ internet.
+Đây là đồ án chuyên ngành của sinh viên năm 4 khoa Khoa học Máy tính, Đại học Bách Khoa. Dự án phát triển một ứng dụng web dự báo giá chứng khoán Việt Nam sử dụng AI Agent và Large Language Model (LLM) để phân tích dữ liệu từ internet.
 
 ## 🎯 Mục tiêu
 - Xây dựng hệ thống thu thập dữ liệu chứng khoán tự động

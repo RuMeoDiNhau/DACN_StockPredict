@@ -47,6 +47,9 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
+# Local Markdown notes and documentation
+*.md
+
 # Data files
 data/raw/*.csv
 data/raw/*.json

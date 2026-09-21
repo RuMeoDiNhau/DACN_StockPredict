@@ -11,7 +11,31 @@ import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
 import requests
+import re
 from typing import List, Dict, Any, Optional
+
+
+def validate_stock_symbol(symbol: str) -> bool:
+    """Kiểm tra mã cổ phiếu gồm 3 đến 5 chữ cái."""
+    return isinstance(symbol, str) and bool(re.fullmatch(r'[A-Za-z]{3,5}', symbol.strip()))
+
+
+def format_currency(amount: float, currency: str = 'VND') -> str:
+    """Định dạng số tiền theo loại tiền được yêu cầu."""
+    if currency == 'VND':
+        return f'{amount:,.0f} ₫'
+    return f'{amount:,.2f} {currency}'
+
+
+def save_model(model: Any, file_path: str) -> bool:
+    """Lưu mô hình Keras hoặc mô hình hỗ trợ giao diện ``save``."""
+    try:
+        ensure_directory(os.path.dirname(file_path))
+        model.save(file_path)
+        return True
+    except Exception as e:
+        print(f"❌ Lỗi lưu model: {str(e)}")
+        return False
 
 def ensure_directory(path: str) -> None:
     """

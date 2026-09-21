@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 import time
 import random
+import os
 from typing import List, Dict, Optional
 
 from utils.logger import setup_logger
@@ -38,6 +39,15 @@ class DataCollector:
         ensure_directory(self.data_dir)
         
         logger.info("📊 Khởi tạo DataCollector thành công")
+
+    def get_available_symbols(self) -> List[str]:
+        """Trả về các mã cổ phiếu Việt Nam được ứng dụng hỗ trợ."""
+        return ['VHM', 'FPT', 'VCB', 'HPG', 'VIC', 'VNM', 'TCB', 'MBB']
+
+    def _save_raw_data(self, data: pd.DataFrame, name: str) -> None:
+        """Lưu dữ liệu thu thập được dưới dạng CSV."""
+        file_path = os.path.join(self.data_dir, f'{name}.csv')
+        data.to_csv(file_path, index=False)
     
     def collect_stock_data(self, symbol: str, days: int = 365) -> Optional[pd.DataFrame]:
         """

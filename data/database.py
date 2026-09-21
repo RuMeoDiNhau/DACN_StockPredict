@@ -37,6 +37,31 @@ class DatabaseManager:
         self.init_database()
         
         logger.info(f"💾 Khởi tạo DatabaseManager: {self.db_path}")
+
+    def init_database(self) -> None:
+        """Tạo các bảng lưu dữ liệu giá và dự báo nếu chưa tồn tại."""
+        with self.get_connection() as conn:
+            conn.executescript('''
+                CREATE TABLE IF NOT EXISTS stock_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    open REAL,
+                    high REAL,
+                    low REAL,
+                    close REAL,
+                    volume REAL,
+                    UNIQUE(symbol, date)
+                );
+                CREATE TABLE IF NOT EXISTS predictions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    symbol TEXT NOT NULL,
+                    prediction_date TEXT NOT NULL,
+                    predicted_price REAL,
+                    created_at TEXT NOT NULL
+                );
+            ''')
+            conn.commit()
     
     @contextmanager
     def get_connection(self):

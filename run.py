@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-File chính để chạy ứng dụng dự báo chứng khoán
-Khởi động Flask server và các background tasks
+File chính để chạy ứng dụng dự báo chứng khoán bằng FastAPI
+Khởi động server và background scheduler qua lifespan
 """
 
+import asyncio
 import os
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
-import threading
-import schedule
-import time
+
+import uvicorn
 
 # Thêm thư mục gốc vào Python path để import các module
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -24,21 +25,17 @@ from utils.logger import setup_logger
 # Thiết lập logging
 logger = setup_logger(__name__)
 
-def run_scheduled_tasks():
-    """
-    Chạy các tác vụ được lên lịch (thu thập dữ liệu, huấn luyện mô hình)
-    """
-    logger.info("Bắt đầu background scheduler")
-    
-    # Lên lịch thu thập dữ liệu hàng ngày lúc 18:00
-    schedule.every().day.at("18:00").do(collect_daily_data)
-    
-    # Lên lịch huấn luyện lại mô hình vào Chủ nhật hàng tuần
-    schedule.every().sunday.at("02:00").do(retrain_models)
-    
+
+async def run_daily_checks() -> None:
+    """Kiểm tra định kỳ và chạy task đúng thời điểm."""
     while True:
-        schedule.run_pending()
-        time.sleep(60)  # Kiểm tra mỗi phút
+        now = datetime.now()
+        if now.hour == 18 and now.minute == 0:
+            await asyncio.to_thread(collect_daily_data)
+        if now.weekday() == 6 and now.hour == 2 and now.minute == 0:
+            await asyncio.to_thread(retrain_models)
+        await asyncio.sleep(60)
+
 
 def collect_daily_data():
     """
@@ -47,18 +44,16 @@ def collect_daily_data():
     try:
         logger.info("Bắt đầu thu thập dữ liệu hàng ngày")
         collector = DataCollector()
-        
-        # Danh sách các mã cổ phiếu chính của VN
         symbols = ['VHM', 'VIC', 'FPT', 'VCB', 'BID', 'CTG', 'MSN', 'MWG', 'HPG', 'SAB']
-        
+
         for symbol in symbols:
             collector.collect_stock_data(symbol, days=30)
             collector.collect_news_data(symbol)
-            
+
         logger.info("Hoàn thành thu thập dữ liệu hàng ngày")
-        
     except Exception as e:
         logger.error(f"Lỗi khi thu thập dữ liệu: {str(e)}")
+
 
 def retrain_models():
     """
@@ -67,17 +62,33 @@ def retrain_models():
     try:
         logger.info("Bắt đầu huấn luyện lại mô hình")
         trainer = ModelTrainer()
-        
-        # Huấn luyện mô hình cho các mã chính
         symbols = ['VHM', 'VIC', 'FPT', 'VCB', 'BID']
-        
+
         for symbol in symbols:
             trainer.train_lstm_model(symbol)
-            
+
         logger.info("Hoàn thành huấn luyện lại mô hình")
-        
     except Exception as e:
         logger.error(f"Lỗi khi huấn luyện mô hình: {str(e)}")
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """Quản lý background scheduler ở mức FastAPI lifespan."""
+    if Config.ENABLE_SCHEDULER:
+        scheduler_task = asyncio.create_task(run_daily_checks())
+        logger.info("✅ Background scheduler đã khởi động")
+        try:
+            yield
+        finally:
+            scheduler_task.cancel()
+            try:
+                await scheduler_task
+            except asyncio.CancelledError:
+                pass
+    else:
+        yield
+
 
 def main():
     """
@@ -87,21 +98,13 @@ def main():
         logger.info("=" * 50)
         logger.info("🚀 KHỞI ĐỘNG ỨNG DỤNG DỰ BÁO CHỨNG KHOÁN")
         logger.info("=" * 50)
-        
-        # Tạo Flask app
+
         app = create_app()
-        
-        # Kiểm tra cấu hình
+        app.router.lifespan_context = lifespan
+
         if not os.path.exists(Config.DATABASE_PATH):
             logger.warning("Database chưa tồn tại, sẽ tạo mới")
-            
-        # Khởi động background scheduler trong thread riêng
-        if Config.ENABLE_SCHEDULER:
-            scheduler_thread = threading.Thread(target=run_scheduled_tasks, daemon=True)
-            scheduler_thread.start()
-            logger.info("✅ Background scheduler đã khởi động")
-        
-        # Hiển thị thông tin ứng dụng
+
         print(f"""
 🌟 ỨNG DỤNG DỰ BÁO CHỨNG KHOÁN BẰNG AI
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -116,29 +119,22 @@ def main():
    1. Mở trình duyệt và truy cập http://localhost:{Config.PORT}
    2. Chọn mã cổ phiếu để phân tích
    3. Xem dự báo và báo cáo AI
-   
+
 🛑 Để dừng ứng dụng: Nhấn Ctrl+C
 """)
-        
-        # Chạy Flask server
-        app.run(
-            host=Config.HOST,
-            port=Config.PORT,
-            debug=Config.DEBUG,
-            threaded=True
-        )
-        
+
+        uvicorn.run(app, host=Config.HOST, port=Config.PORT, log_level="info")
+
     except KeyboardInterrupt:
         logger.info("🛑 Người dùng dừng ứng dụng")
         print("\n👋 Cảm ơn bạn đã sử dụng ứng dụng!")
-        
     except Exception as e:
         logger.error(f"❌ Lỗi khởi động ứng dụng: {str(e)}")
         print(f"\n❌ Có lỗi xảy ra: {str(e)}")
         print("🔧 Vui lòng kiểm tra log để biết thêm chi tiết")
-        
     finally:
         logger.info("🔚 Ứng dụng đã tắt")
+
 
 if __name__ == '__main__':
     main()
