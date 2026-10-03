@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Basic tests cho ứng dụng Stock AI Predictor
-"""
+"""Offline endpoint tests for the separated FastAPI/SQLite web MVP."""
 
 import os
 import sys
@@ -11,19 +9,18 @@ import unittest
 
 import pandas as pd
 from fastapi.testclient import TestClient
-from unittest.mock import patch
 
 # Thêm project root vào Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app import create_app
+from backend.app.main import create_app
 from config.settings import TestingConfig
 from data.collector import DataCollector
 from data.processor import DataProcessor
 from utils.helpers import validate_stock_symbol, format_currency
 
 
-class TestBasicFunctionality(unittest.TestCase):
+class TestWebMvpEndpoints(unittest.TestCase):
     """
     Test các chức năng cơ bản
     """
@@ -39,67 +36,26 @@ class TestBasicFunctionality(unittest.TestCase):
 
         self.app = create_app(TestConfig)
         self.client = TestClient(self.app)
+        self.app.state.db.upsert_stock_data(pd.DataFrame([
+            {'Date': '2024-01-02', 'Open': 100, 'High': 105, 'Low': 99, 'Close': 104, 'Volume': 1000, 'Symbol': 'VHM'},
+            {'Date': '2024-01-03', 'Open': 104, 'High': 106, 'Low': 103, 'Close': 105, 'Volume': 1100, 'Symbol': 'VHM'},
+        ]))
 
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_app_creation(self):
-        """
-        Test tạo FastAPI app
-        """
-        self.assertIsNotNone(self.app)
-        self.assertTrue(self.app.title == "StockPredict")
-
-    def test_home_page(self):
-        """
-        Test trang chủ
-        """
-        response = self.client.get('/')
+    def test_health(self):
+        response = self.client.get('/api/health')
         self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'success': True, 'service': 'stockpredict-api'})
 
     def test_api_symbols(self):
-        """
-        Test API lấy danh sách symbols
-        """
         response = self.client.get('/api/symbols')
         self.assertEqual(response.status_code, 200)
-
-        data = response.json()
-        self.assertTrue(data['success'])
-        self.assertIn('symbols', data)
-        self.assertIsInstance(data['symbols'], list)
-
-    def test_symbol_detail_page_uses_existing_template(self):
-        rows = pd.DataFrame([{
-            'Date': pd.Timestamp('2024-01-02'),
-            'Open': 100.0,
-            'High': 105.0,
-            'Low': 99.0,
-            'Close': 104.0,
-            'Volume': 1000.0,
-            'Symbol': 'VHM',
-        }])
-        with patch.object(self.app.state.db, 'get_stock_data', return_value=rows), \
-             patch.object(self.app.state.db, 'get_predictions', return_value=pd.DataFrame()):
-            response = self.client.get('/symbol/VHM')
-        self.assertEqual(response.status_code, 200)
-        self.assertIn('Dữ liệu OHLCV gần nhất', response.text)
+        self.assertEqual(response.json(), {'success': True, 'symbols': ['VHM']})
 
     def test_api_stock_data_uses_normalized_schema(self):
-        rows = pd.DataFrame([
-            {
-                'Date': pd.Timestamp('2024-01-02'),
-                'Open': 100.0,
-                'High': 105.0,
-                'Low': 99.0,
-                'Close': 104.0,
-                'Volume': 1000.0,
-                'Symbol': 'VHM',
-            }
-        ])
-        with patch.object(self.app.state.db, 'get_stock_data', return_value=rows):
-            response = self.client.get('/api/stocks/VHM')
-
+        response = self.client.get('/api/stocks/vhm?limit=2')
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(
@@ -111,10 +67,20 @@ class TestBasicFunctionality(unittest.TestCase):
     def test_endpoint_error_statuses_and_market_status(self):
         self.assertEqual(self.client.get('/api/stocks/NOPE').status_code, 404)
         self.assertEqual(self.client.get('/api/stocks/!').status_code, 422)
-        self.assertEqual(self.client.get('/symbol/NOPE').status_code, 404)
+        self.assertEqual(self.client.get('/api/stocks/VHM?limit=0').status_code, 422)
+        self.assertEqual(self.client.get('/api/stocks/VHM?limit=91').status_code, 422)
         market = self.client.get('/api/market-status')
         self.assertEqual(market.status_code, 200)
         self.assertEqual(market.json()['timezone'], 'Asia/Ho_Chi_Minh')
+
+    def test_frontend_routes_are_static_and_direct(self):
+        home = self.client.get('/')
+        detail = self.client.get('/symbol/VHM')
+        self.assertEqual(home.status_code, 200)
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn('StockPredict MVP', home.text)
+        self.assertIn('Dữ liệu OHLCV từ SQLite qua REST API', detail.text)
+        self.assertNotIn('VHM</td>', detail.text)
 
 
 class TestDataCollector(unittest.TestCase):
