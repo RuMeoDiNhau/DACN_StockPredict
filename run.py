@@ -32,8 +32,8 @@ async def run_daily_checks() -> None:
         now = datetime.now()
         if now.hour == 18 and now.minute == 0:
             await asyncio.to_thread(collect_daily_data)
-        if now.weekday() == 6 and now.hour == 2 and now.minute == 0:
-            await asyncio.to_thread(retrain_models)
+        # Weekly model retraining is intentionally disabled until its API and
+        # training specification are defined.
         await asyncio.sleep(60)
 
 
@@ -48,7 +48,7 @@ def collect_daily_data():
 
         for symbol in symbols:
             collector.collect_stock_data(symbol, days=30)
-            collector.collect_news_data(symbol)
+            # News collection is not implemented in the current collector.
 
         logger.info("Hoàn thành thu thập dữ liệu hàng ngày")
     except Exception as e:
@@ -65,7 +65,7 @@ def retrain_models():
         symbols = ['VHM', 'VIC', 'FPT', 'VCB', 'BID']
 
         for symbol in symbols:
-            trainer.train_lstm_model(symbol)
+            logger.warning("Bỏ qua huấn luyện định kỳ: chưa có đặc tả API huấn luyện")
 
         logger.info("Hoàn thành huấn luyện lại mô hình")
     except Exception as e:

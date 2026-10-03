@@ -121,6 +121,13 @@ class DatabaseManager:
             result = result.sort_values("Date").reset_index(drop=True)
         return result
 
+    def get_available_symbols(self) -> List[str]:
+        """Return symbols that currently have persisted OHLCV data."""
+        query = "SELECT DISTINCT symbol FROM stock_data ORDER BY symbol"
+        with self.get_connection() as conn:
+            rows = conn.execute(query).fetchall()
+        return [row[0] for row in rows]
+
     def get_predictions(self, symbol: str, limit: int = 5) -> pd.DataFrame:
         """Return the newest predictions for a symbol."""
         limit = max(1, int(limit))
