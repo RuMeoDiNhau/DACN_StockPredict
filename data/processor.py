@@ -1,77 +1,85 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Module xử lý và làm sạch dữ liệu chứng khoán
-"""
+"""Cleaning and feature preparation for stock time-series data."""
 
-import pandas as pd
+from typing import Dict
+
 import numpy as np
-from sklearn.preprocessing import MinMaxScaler, StandardScaler
-from typing import Tuple, Optional, List, Dict
-from datetime import datetime
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+
 class DataProcessor:
-    """
-    Lớp xử lý dữ liệu chứng khoán cho machine learning
-    """
-    
+    """Prepare stable, leakage-safe input data for the ML pipeline."""
+
+    PRICE_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
+
     def __init__(self):
-        """
-        Khởi tạo DataProcessor
-        """
-        self.scalers = {}  # Lưu trữ các scaler đã fit
+        self.scalers: Dict[str, MinMaxScaler] = {}
         self.feature_columns = []
-        logger.info("⚙️ Khởi tạo DataProcessor thành công")
-    
+        logger.info("DataProcessor initialized")
+
     def clean_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Làm sạch dữ liệu cơ bản
-        
-        Args:
-            df: DataFrame chứa dữ liệu thô
-        
-        Returns:
-            DataFrame đã được làm sạch
-        """
-        try:
-            logger.info("🧹 Bắt đầu làm sạch dữ liệu")
-            
-            # Copy để không thay đổi dữ liệu gốc
-            df_clean = df.copy()
-            
-            # Sắp xếp theo ngày
-            if 'Date' in df_clean.columns:
-                df_clean['Date'] = pd.to_datetime(df_clean['Date'])
-                df_clean = df_clean.sort_values('Date').reset_index(drop=True)
-            
-            # Xử lý missing values
-            numeric_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-            for col in numeric_columns:
-                if col in df_clean.columns:
-                    # Fill missing values bằng forward fill, sau đó backward fill
-                    df_clean[col] = df_clean[col].fillna(method='ffill').fillna(method='bfill')
-            
-            # Xóa outliers cực đoan (giá âm hoặc volume âm)
-            for col in ['Open', 'High', 'Low', 'Close']:
-                if col in df_clean.columns:
-                    df_clean = df_clean[df_clean[col] > 0]
-            
-            if 'Volume' in df_clean.columns:
-                df_clean = df_clean[df_clean['Volume'] >= 0]
-            
-            # Kiểm tra logic giá (High >= Low, etc.)
-            if all(col in df_clean.columns for col in ['High', 'Low', 'Open', 'Close']):
-                # High phải >= Low
-                valid_price = df_clean['High'] >= df_clean['Low']
-                df_clean = df_clean[valid_price]
-            
-            logger.info(f"✅ Làm sạch hoàn thành. Còn lại {len(df_clean)} dòng dữ liệu")
-            return df_clean
-            
-        except Exception as e:
-            logger.error(f"❌ Lỗi làm sạch dữ liệu: {str(e)}")
-            return df
+        """Clean and validate OHLCV data without mutating the input frame."""
+        if df is None or df.empty:
+            return pd.DataFrame(columns=list(df.columns) if df is not None else [])
+
+        cleaned = df.copy()
+        if "Date" not in cleaned.columns:
+            raise ValueError("Stock data must contain a Date column")
+
+        cleaned["Date"] = pd.to_datetime(cleaned["Date"], errors="coerce")
+        cleaned = cleaned.dropna(subset=["Date"])
+        cleaned = cleaned.sort_values("Date")
+        cleaned = cleaned.drop_duplicates(subset=["Date"], keep="last")
+
+        present = [column for column in self.PRICE_COLUMNS if column in cleaned]
+        if not present:
+            raise ValueError("Stock data has no OHLCV columns")
+
+        for column in present:
+            cleaned[column] = pd.to_numeric(cleaned[column], errors="coerce")
+            if cleaned[column].notna().sum() == 0:
+                raise ValueError(f"Column {column} contains no numeric values")
+            cleaned[column] = cleaned[column].interpolate(limit_direction="both")
+
+        price_columns = [
+            column for column in ["Open", "High", "Low", "Close"]
+            if column in cleaned
+        ]
+        if price_columns:
+            cleaned = cleaned[(cleaned[price_columns] > 0).all(axis=1)]
+        if "Volume" in cleaned:
+            cleaned = cleaned[cleaned["Volume"] >= 0]
+        if {"High", "Low"}.issubset(cleaned):
+            cleaned = cleaned[cleaned["High"] >= cleaned["Low"]]
+        if {"Open", "High", "Low", "Close"}.issubset(cleaned):
+            cleaned = cleaned[
+                (cleaned["High"] >= cleaned["Open"])
+                & (cleaned["High"] >= cleaned["Close"])
+                & (cleaned["Low"] <= cleaned["Open"])
+                & (cleaned["Low"] <= cleaned["Close"])
+            ]
+
+        cleaned = cleaned.replace([np.inf, -np.inf], np.nan)
+        cleaned = cleaned.dropna(subset=present)
+        cleaned = cleaned.reset_index(drop=True)
+        logger.info("Cleaned %s stock data rows", len(cleaned))
+        return cleaned
+
+    def fit_scale(self, df: pd.DataFrame, symbol: str) -> pd.DataFrame:
+        """Fit a MinMaxScaler on the provided training frame only."""
+        cleaned = self.clean_data(df)
+        columns = [column for column in self.PRICE_COLUMNS if column in cleaned]
+        if not columns:
+            raise ValueError("No numeric feature columns available for scaling")
+        scaler = MinMaxScaler()
+        result = cleaned.copy()
+        result[columns] = scaler.fit_transform(result[columns])
+        self.scalers[symbol.upper()] = scaler
+        self.feature_columns = columns
+        return result

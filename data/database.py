@@ -31,7 +31,8 @@ class DatabaseManager:
         self.db_path = db_path or Config.DATABASE_PATH
         
         # Tạo thư mục chứa database nếu chưa có
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        db_dir = os.path.dirname(os.path.abspath(self.db_path))
+        os.makedirs(db_dir, exist_ok=True)
         
         # Khởi tạo database
         self.init_database()
@@ -60,8 +61,85 @@ class DatabaseManager:
                     predicted_price REAL,
                     created_at TEXT NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS idx_stock_data_symbol_date
+                    ON stock_data(symbol, date);
             ''')
             conn.commit()
+
+    def upsert_stock_data(self, data: pd.DataFrame) -> int:
+        """Insert or update normalized OHLCV rows and return row count.
+
+        The operation is idempotent by ``(symbol, date)`` so daily collection
+        can safely be run again without creating duplicates.
+        """
+        required = ["Symbol", "Date", "Open", "High", "Low", "Close", "Volume"]
+        missing = [column for column in required if column not in data.columns]
+        if missing:
+            raise ValueError(f"Missing stock data columns: {missing}")
+        if data.empty:
+            return 0
+
+        rows = data[required].copy()
+        rows["Symbol"] = rows["Symbol"].astype(str).str.upper().str.strip()
+        rows["Date"] = pd.to_datetime(rows["Date"], errors="raise").dt.strftime("%Y-%m-%d")
+        for column in required[2:]:
+            rows[column] = pd.to_numeric(rows[column], errors="raise")
+        rows = rows.drop_duplicates(subset=["Symbol", "Date"], keep="last")
+
+        sql = """
+            INSERT INTO stock_data
+                (symbol, date, open, high, low, close, volume)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(symbol, date) DO UPDATE SET
+                open=excluded.open,
+                high=excluded.high,
+                low=excluded.low,
+                close=excluded.close,
+                volume=excluded.volume
+        """
+        values = [tuple(row) for row in rows.itertuples(index=False, name=None)]
+        with self.get_connection() as conn:
+            conn.executemany(sql, values)
+            conn.commit()
+        return len(values)
+
+    def get_stock_data(self, symbol: str, limit: int = 100) -> pd.DataFrame:
+        """Return the newest OHLCV rows for a symbol in chronological order."""
+        limit = max(1, int(limit))
+        query = """
+            SELECT symbol AS Symbol, date AS Date, open AS Open,
+                   high AS High, low AS Low, close AS Close, volume AS Volume
+            FROM stock_data
+            WHERE symbol = ?
+            ORDER BY date DESC
+            LIMIT ?
+        """
+        with self.get_connection() as conn:
+            result = pd.read_sql_query(query, conn, params=[symbol.upper(), limit])
+        if not result.empty:
+            result["Date"] = pd.to_datetime(result["Date"])
+            result = result.sort_values("Date").reset_index(drop=True)
+        return result
+
+    def get_available_symbols(self) -> List[str]:
+        """Return symbols that currently have persisted OHLCV data."""
+        query = "SELECT DISTINCT symbol FROM stock_data ORDER BY symbol"
+        with self.get_connection() as conn:
+            rows = conn.execute(query).fetchall()
+        return [row[0] for row in rows]
+
+    def get_predictions(self, symbol: str, limit: int = 5) -> pd.DataFrame:
+        """Return the newest predictions for a symbol."""
+        limit = max(1, int(limit))
+        query = """
+            SELECT symbol, prediction_date, predicted_price, created_at
+            FROM predictions
+            WHERE symbol = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """
+        with self.get_connection() as conn:
+            return pd.read_sql_query(query, conn, params=[symbol.upper(), limit])
     
     @contextmanager
     def get_connection(self):

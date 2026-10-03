@@ -6,9 +6,12 @@ Basic tests cho ứng dụng Stock AI Predictor
 
 import os
 import sys
+import tempfile
 import unittest
 
+import pandas as pd
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 
 # Thêm project root vào Python path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,8 +32,16 @@ class TestBasicFunctionality(unittest.TestCase):
         """
         Thiết lập test environment
         """
-        self.app = create_app(TestingConfig)
+        self.temp_dir = tempfile.TemporaryDirectory()
+
+        class TestConfig(TestingConfig):
+            DATABASE_PATH = os.path.join(self.temp_dir.name, "test.db")
+
+        self.app = create_app(TestConfig)
         self.client = TestClient(self.app)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
 
     def test_app_creation(self):
         """
@@ -57,6 +68,53 @@ class TestBasicFunctionality(unittest.TestCase):
         self.assertTrue(data['success'])
         self.assertIn('symbols', data)
         self.assertIsInstance(data['symbols'], list)
+
+    def test_symbol_detail_page_uses_existing_template(self):
+        rows = pd.DataFrame([{
+            'Date': pd.Timestamp('2024-01-02'),
+            'Open': 100.0,
+            'High': 105.0,
+            'Low': 99.0,
+            'Close': 104.0,
+            'Volume': 1000.0,
+            'Symbol': 'VHM',
+        }])
+        with patch.object(self.app.state.db, 'get_stock_data', return_value=rows), \
+             patch.object(self.app.state.db, 'get_predictions', return_value=pd.DataFrame()):
+            response = self.client.get('/symbol/VHM')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Dữ liệu OHLCV gần nhất', response.text)
+
+    def test_api_stock_data_uses_normalized_schema(self):
+        rows = pd.DataFrame([
+            {
+                'Date': pd.Timestamp('2024-01-02'),
+                'Open': 100.0,
+                'High': 105.0,
+                'Low': 99.0,
+                'Close': 104.0,
+                'Volume': 1000.0,
+                'Symbol': 'VHM',
+            }
+        ])
+        with patch.object(self.app.state.db, 'get_stock_data', return_value=rows):
+            response = self.client.get('/api/stocks/VHM')
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            list(payload['data'][0]),
+            ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Symbol'],
+        )
+        self.assertEqual(payload['data'][0]['Date'], '2024-01-02T00:00:00')
+
+    def test_endpoint_error_statuses_and_market_status(self):
+        self.assertEqual(self.client.get('/api/stocks/NOPE').status_code, 404)
+        self.assertEqual(self.client.get('/api/stocks/!').status_code, 422)
+        self.assertEqual(self.client.get('/symbol/NOPE').status_code, 404)
+        market = self.client.get('/api/market-status')
+        self.assertEqual(market.status_code, 200)
+        self.assertEqual(market.json()['timezone'], 'Asia/Ho_Chi_Minh')
 
 
 class TestDataCollector(unittest.TestCase):

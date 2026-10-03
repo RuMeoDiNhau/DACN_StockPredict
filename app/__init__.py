@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from jinja2 import pass_context
 
 from config.settings import Config
+from data.database import DatabaseManager
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -59,6 +60,7 @@ def create_app(config_class=Config):
     templates.env.globals["url_for"] = template_url_for
     templates.env.globals["get_flashed_messages"] = get_flashed_messages
     app.state.templates = templates
+    app.state.db = DatabaseManager(db_path=config_class.DATABASE_PATH)
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     from app.routes import main_bp, api_bp

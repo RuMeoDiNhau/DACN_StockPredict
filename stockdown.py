@@ -1,12 +1,20 @@
-import yfinance as yf
+"""Tải dữ liệu giá mẫu bằng vnstock."""
 
-TICKERS = ["SPY", "AAPL"]
+import os
 
-print(f"Đang tải dữ liệu và group theo ticker")
-data = yf.download(TICKERS, start="2017-01-01", end="2017-04-30",
-                       group_by="ticker")
+from vnstock import Quote
 
-print(f"Đang chuyển dữ liệu thành file .csv...")
-data.to_csv("stock_data.csv")
 
-print(f"Đã lưu dữ liệu vào file stock_data.csv")
+TICKERS = ["VHM", "FPT"]
+
+
+for symbol in TICKERS:
+    print(f"Đang tải dữ liệu cho {symbol}")
+    data = Quote(symbol=symbol, source="VCI").history(
+        start="2017-01-01",
+        end="2017-04-30",
+        interval="1D",
+    )
+    output_path = f"stock_data_{symbol}.csv"
+    data.to_csv(output_path, index=False, encoding="utf-8-sig")
+    print(f"Đã lưu dữ liệu vào {os.path.abspath(output_path)}")

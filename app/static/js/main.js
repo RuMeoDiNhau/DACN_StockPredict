@@ -1,191 +1,118 @@
-// Main JavaScript cho Stock AI Predictor
-// Quản lý các tính năng chung của ứng dụng
-
-// Biến global
 let currentSymbol = 'VHM';
 let priceChart = null;
+let currentRows = [];
 
-// Khởi tạo khi trang load
-document.addEventListener('DOMContentLoaded', function() {
-    initializeApp();
-});
+document.addEventListener('DOMContentLoaded', initializeApp);
 
-/**
- * Khởi tạo ứng dụng
- */
 function initializeApp() {
-    console.log('🚀 Khởi tạo Stock AI Predictor');
-    
-    // Kiểm tra hỗ trợ localStorage
-    checkBrowserSupport();
-    
-    // Setup event listeners chung
     setupGlobalEventListeners();
-    
-    // Load market status
     loadMarketStatus();
-    
-    // Auto refresh market data mỗi 5 phút
+    const firstSymbol = document.querySelector('.symbol-item');
+    if (firstSymbol) {
+        selectSymbol(firstSymbol.dataset.symbol);
+    } else {
+        setOhlcvStatus('ChÆ°a cÃ³ mÃ£ nÃ o cÃ³ dá»¯ liá»‡u trong SQLite.', 'muted');
+    }
     setInterval(loadMarketStatus, 5 * 60 * 1000);
 }
 
-/**
- * Kiểm tra hỗ trợ trình duyệt
- */
-function checkBrowserSupport() {
-    // Kiểm tra localStorage
-    if (!window.localStorage) {
-        showAlert('Trình duyệt không hỗ trợ localStorage', 'warning');
-    }
-    
-    // Kiểm tra fetch API
-    if (!window.fetch) {
-        showAlert('Trình duyệt không hỗ trợ Fetch API', 'error');
-    }
-    
-    // Kiểm tra Chart.js
-    if (typeof Chart === 'undefined') {
-        console.warn('Chart.js chưa được load');
-    }
-}
-
-/**
- * Setup event listeners chung
- */
 function setupGlobalEventListeners() {
-    // Handle form submissions
-    document.addEventListener('submit', function(e) {
-        const form = e.target;
-        if (form.classList.contains('ajax-form')) {
-            e.preventDefault();
-            handleAjaxForm(form);
-        }
+    document.querySelectorAll('.symbol-item').forEach(item => {
+        item.addEventListener('click', event => {
+            event.preventDefault();
+            selectSymbol(item.dataset.symbol);
+        });
     });
-    
-    // Handle AJAX buttons
-    document.addEventListener('click', function(e) {
-        if (e.target.classList.contains('ajax-btn')) {
-            e.preventDefault();
-            handleAjaxButton(e.target);
-        }
+    document.querySelectorAll('[data-period]').forEach(button => {
+        button.addEventListener('click', () => {
+            document.querySelectorAll('[data-period]').forEach(item => item.classList.remove('active'));
+            button.classList.add('active');
+            renderRows(currentRows.slice(-Number(button.dataset.period)));
+        });
+    });
+    const search = document.getElementById('symbol-search');
+    if (search) {
+        search.addEventListener('input', () => {
+            const query = search.value.trim().toUpperCase();
+            document.querySelectorAll('.symbol-item').forEach(item => {
+                item.classList.toggle('d-none', !item.dataset.symbol.includes(query));
+            });
+        });
+    }
+}
+
+async function selectSymbol(symbol) {
+    currentSymbol = symbol.toUpperCase();
+    const heading = document.getElementById('current-symbol');
+    if (heading) heading.textContent = currentSymbol;
+    setOhlcvStatus(`Äang táº£i dá»¯ liá»‡u ${currentSymbol}...`, 'muted');
+    try {
+        const response = await fetch(`/api/stocks/${encodeURIComponent(currentSymbol)}?limit=90`);
+        const payload = await response.json();
+        if (!response.ok || !payload.success) throw new Error(payload.error || 'KhÃ´ng táº£i Ä‘Æ°á»£c dá»¯ liá»‡u');
+        currentRows = payload.data || [];
+        renderRows(currentRows.slice(-getSelectedPeriod()));
+        setOhlcvStatus(`ÄÃ£ táº£i ${currentRows.length} phiÃªn`, 'success');
+    } catch (error) {
+        currentRows = [];
+        renderRows([]);
+        setOhlcvStatus(error.message, 'error');
+    }
+}
+
+function getSelectedPeriod() {
+    const active = document.querySelector('[data-period].active');
+    return active ? Number(active.dataset.period) : 30;
+}
+
+function renderRows(rows) {
+    const latest = rows[rows.length - 1];
+    document.getElementById('latest-date').textContent = latest ? formatDate(latest.Date) : '--';
+    document.getElementById('latest-close').textContent = latest ? formatNumber(latest.Close) : '--';
+    document.getElementById('latest-volume').textContent = latest ? formatNumber(latest.Volume) : '--';
+    if (typeof Chart === 'undefined') return;
+    const canvas = document.getElementById('price-chart');
+    if (!canvas) return;
+    if (priceChart) priceChart.destroy();
+    priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: rows.map(row => formatDate(row.Date)),
+            datasets: [{ label: `${currentSymbol} Close`, data: rows.map(row => row.Close), borderColor: '#0d6efd', tension: 0.2 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
-/**
- * Load market status
- */
 async function loadMarketStatus() {
     try {
         const response = await fetch('/api/market-status');
         const data = await response.json();
-        
-        if (data.success) {
-            updateMarketStatusUI(data.status);
-        }
+        if (!response.ok || !data.success) throw new Error('Market status unavailable');
+        updateMarketStatusUI(data);
     } catch (error) {
-        console.error('❌ Lỗi load market status:', error);
+        updateMarketStatusUI({is_open: false, status: 'unavailable'});
     }
 }
 
-/**
- * Update market status UI
- */
 function updateMarketStatusUI(status) {
-    const statusElement = document.getElementById('market-status');
-    if (!statusElement) return;
-    
-    const isOpen = status.is_open;
-    const statusClass = isOpen ? 'success' : 'danger';
-    const statusText = isOpen ? 'mở' : 'đóng';
-    
-    statusElement.innerHTML = `
-        <i class="fas fa-circle text-${statusClass}"></i>
-        Thị trường ${statusText}
-    `;
+    const element = document.getElementById('market-status');
+    if (!element) return;
+    const open = status.is_open;
+    element.innerHTML = `<i class="fas fa-circle text-${open ? 'success' : 'secondary'}"></i> Thá»‹ trÆ°á»ng ${open ? 'má»Ÿ' : 'Ä‘Ã³ng'}`;
 }
 
-/**
- * Show alert message
- */
-function showAlert(message, type = 'info', duration = 5000) {
-    const alertContainer = document.getElementById('alert-container') || createAlertContainer();
-    
-    const alertClass = {
-        'success': 'alert-success',
-        'error': 'alert-danger', 
-        'warning': 'alert-warning',
-        'info': 'alert-info'
-    }[type] || 'alert-info';
-    
-    const alertHtml = `
-        <div class="alert ${alertClass} alert-dismissible fade show auto-hide" role="alert">
-            <i class="fas fa-${getAlertIcon(type)} me-2"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-    
-    alertContainer.insertAdjacentHTML('beforeend', alertHtml);
-    
-    // Auto remove after duration
-    if (duration > 0) {
-        setTimeout(() => {
-            const alert = alertContainer.lastElementChild;
-            if (alert && alert.classList.contains('auto-hide')) {
-                alert.classList.remove('show');
-                setTimeout(() => alert.remove(), 150);
-            }
-        }, duration);
-    }
+function setOhlcvStatus(message, type) {
+    const element = document.getElementById('ohlcv-status');
+    if (!element) return;
+    element.textContent = message;
+    element.className = `mb-2 text-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'muted'}`;
 }
 
-/**
- * Create alert container if not exists
- */
-function createAlertContainer() {
-    const container = document.createElement('div');
-    container.id = 'alert-container';
-    container.className = 'position-fixed top-0 end-0 p-3';
-    container.style.zIndex = '9999';
-    document.body.appendChild(container);
-    return container;
-}
+function formatDate(value) { return String(value).slice(0, 10); }
+function formatNumber(value) { return new Intl.NumberFormat('vi-VN').format(Number(value)); }
+function formatCurrency(amount, currency = 'VND') { return formatNumber(amount) + ` ${currency}`; }
+function formatPercentage(value, decimals = 2) { return `${value >= 0 ? '+' : ''}${(value * 100).toFixed(decimals)}%`; }
+function showAlert(message) { window.alert(message); }
 
-/**
- * Get alert icon based on type
- */
-function getAlertIcon(type) {
-    const icons = {
-        'success': 'check-circle',
-        'error': 'exclamation-triangle',
-        'warning': 'exclamation-circle',
-        'info': 'info-circle'
-    };
-    return icons[type] || 'info-circle';
-}
-
-/**
- * Format currency in Vietnamese style
- */
-function formatCurrency(amount, currency = 'VND') {
-    if (currency === 'VND') {
-        return new Intl.NumberFormat('vi-VN').format(amount) + ' ₫';
-    }
-    return new Intl.NumberFormat('vi-VN').format(amount) + ' ' + currency;
-}
-
-/**
- * Format percentage
- */
-function formatPercentage(value, decimals = 2) {
-    const percentage = (value * 100).toFixed(decimals);
-    return (value >= 0 ? '+' : '') + percentage + '%';
-}
-
-// Export functions for use in other scripts
-window.StockApp = {
-    showAlert,
-    formatCurrency,
-    formatPercentage,
-    loadMarketStatus
-};
+window.StockApp = { showAlert, formatCurrency, formatPercentage, loadMarketStatus, selectSymbol };
