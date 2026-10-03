@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StockPredict Dashboard</title>
+  <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body data-page="dashboard">
+  <header class="site-header">
+    <a href="/" class="brand">StockPredict MVP</a>
+    <span id="market-status" aria-live="polite">Đang kiểm tra thị trường…</span>
+  </header>
+  <main class="layout">
+    <aside class="panel symbols-panel">
+      <label for="symbol-search">Tra cứu mã cổ phiếu</label>
+      <form id="symbol-form">
+        <input id="symbol-search" name="symbol" autocomplete="off" placeholder="Ví dụ: VHM" maxlength="10">
+        <button type="submit">Xem</button>
+      </form>
+      <p id="symbols-status" class="status" aria-live="polite">Đang tải danh sách mã…</p>
+      <ul id="symbols-list" class="symbols-list" aria-label="Các mã có dữ liệu"></ul>
+    </aside>
+    <section class="panel chart-panel">
+      <div class="heading-row">
+        <div><h1 id="current-symbol">Dữ liệu OHLCV</h1><p>Giá đóng cửa theo dữ liệu trong SQLite</p></div>
+        <div class="periods" aria-label="Khoảng dữ liệu">
+          <button data-period="7">7 ngày</button>
+          <button data-period="30" class="active">30 ngày</button>
+          <button data-period="90">90 ngày</button>
+        </div>
+      </div>
+      <p id="ohlcv-status" class="status" aria-live="polite">Chọn một mã để tải dữ liệu.</p>
+      <div id="chart" class="chart" role="img" aria-label="Biểu đồ đường giá đóng cửa"></div>
+      <dl class="latest-data">
+        <div><dt>Ngày gần nhất</dt><dd id="latest-date">—</dd></div>
+        <div><dt>Giá đóng cửa</dt><dd id="latest-close">—</dd></div>
+        <div><dt>Khối lượng</dt><dd id="latest-volume">—</dd></div>
+      </dl>
+    </section>
+  </main>
+  <script src="/assets/js/app.js"></script>
+</body>
+</html>
