@@ -63,6 +63,14 @@ class DatabaseManager:
                 );
                 CREATE INDEX IF NOT EXISTS idx_stock_data_symbol_date
                     ON stock_data(symbol, date);
+                CREATE TABLE IF NOT EXISTS data_ingestion_status (
+                    symbol TEXT PRIMARY KEY,
+                    source TEXT NOT NULL,
+                    last_success_at TEXT,
+                    last_data_date TEXT,
+                    row_count INTEGER NOT NULL DEFAULT 0,
+                    last_error TEXT
+                );
             ''')
             conn.commit()
 
@@ -127,6 +135,67 @@ class DatabaseManager:
         with self.get_connection() as conn:
             rows = conn.execute(query).fetchall()
         return [row[0] for row in rows]
+
+    def get_latest_stock_date(self, symbol: str) -> Optional[str]:
+        """Return the newest persisted date for a symbol, if any."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT MAX(date) AS last_date FROM stock_data WHERE symbol = ?",
+                [symbol.upper().strip()],
+            ).fetchone()
+        return row["last_date"] if row and row["last_date"] else None
+
+    def count_stock_rows(self, symbol: str) -> int:
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS row_count FROM stock_data WHERE symbol = ?",
+                [symbol.upper().strip()],
+            ).fetchone()
+        return int(row["row_count"])
+
+    def upsert_ingestion_status(
+        self,
+        symbol: str,
+        source: str,
+        *,
+        last_success_at: Optional[str] = None,
+        last_data_date: Optional[str] = None,
+        row_count: Optional[int] = None,
+        last_error: Optional[str] = None,
+    ) -> None:
+        """Create or update ingestion metadata without touching OHLCV rows."""
+        symbol = symbol.upper().strip()
+        current = self.get_ingestion_status(symbol)
+        values = {
+            "source": source,
+            "last_success_at": last_success_at if last_success_at is not None else (current or {}).get("last_success_at"),
+            "last_data_date": last_data_date if last_data_date is not None else (current or {}).get("last_data_date"),
+            "row_count": row_count if row_count is not None else (current or {}).get("row_count", 0),
+            "last_error": last_error,
+        }
+        with self.get_connection() as conn:
+            conn.execute(
+                """INSERT INTO data_ingestion_status
+                   (symbol, source, last_success_at, last_data_date, row_count, last_error)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(symbol) DO UPDATE SET
+                     source=excluded.source,
+                     last_success_at=excluded.last_success_at,
+                     last_data_date=excluded.last_data_date,
+                     row_count=excluded.row_count,
+                     last_error=excluded.last_error""",
+                [symbol, values["source"], values["last_success_at"], values["last_data_date"], values["row_count"], values["last_error"]],
+            )
+            conn.commit()
+
+    def get_ingestion_status(self, symbol: str) -> Optional[Dict[str, Any]]:
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT symbol, source, last_success_at, last_data_date, row_count, last_error "
+                "FROM data_ingestion_status WHERE symbol = ?",
+                [symbol.upper().strip()],
+            ).fetchone()
+        return dict(row) if row else None
 
     def get_predictions(self, symbol: str, limit: int = 5) -> pd.DataFrame:
         """Return the newest predictions for a symbol."""
