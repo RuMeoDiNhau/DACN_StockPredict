@@ -7,38 +7,75 @@
   <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body data-page="dashboard">
-  <header class="site-header">
+  <header class="site-header dashboard-header">
     <a href="/" class="brand">StockPredict MVP</a>
-    <span id="market-status" aria-live="polite">Đang kiểm tra thị trường…</span>
+    <div class="header-meta">
+      <span id="market-status" class="market-chip" aria-live="polite">Đang kiểm tra thị trường…</span>
+      <span id="dashboard-data-status" class="header-data-status">Đang tải dữ liệu…</span>
+    </div>
   </header>
-  <main class="layout">
-    <aside class="panel symbols-panel">
-      <label for="symbol-search">Tra cứu mã cổ phiếu</label>
-      <form id="symbol-form">
-        <input id="symbol-search" name="symbol" autocomplete="off" placeholder="Ví dụ: VHM" maxlength="10">
-        <button type="submit">Xem</button>
+  <main class="dashboard-shell">
+    <section class="dashboard-search panel" aria-labelledby="search-title">
+      <div>
+        <p class="eyebrow">MARKET OVERVIEW</p>
+        <h1 id="search-title">Theo dõi thị trường của bạn</h1>
+        <p class="muted">Chọn một mã để xem giá đóng cửa và dữ liệu OHLCV mới nhất.</p>
+      </div>
+      <form id="symbol-form" class="search-form">
+        <label class="sr-only" for="symbol-search">Tìm mã cổ phiếu</label>
+        <input id="symbol-search" name="symbol" list="symbol-options" autocomplete="off" placeholder="Tìm mã, ví dụ VHM" maxlength="10" aria-label="Tìm mã cổ phiếu">
+        <datalist id="symbol-options"></datalist>
+        <button type="submit">Xem mã</button>
       </form>
       <p id="symbols-status" class="status" aria-live="polite">Đang tải danh sách mã…</p>
-      <ul id="symbols-list" class="symbols-list" aria-label="Các mã có dữ liệu"></ul>
-    </aside>
-    <section class="panel chart-panel">
-      <div class="heading-row">
-        <div><h1 id="current-symbol">Dữ liệu OHLCV</h1><p>Giá đóng cửa theo dữ liệu trong SQLite</p></div>
-        <div class="periods" aria-label="Khoảng dữ liệu">
-          <button data-period="7">7 ngày</button>
-          <button data-period="30" class="active">30 ngày</button>
-          <button data-period="90">90 ngày</button>
+    </section>
+
+    <section class="dashboard-summary" aria-label="Tóm tắt mã đang chọn">
+      <div class="summary-primary panel"><span class="eyebrow">MÃ ĐANG CHỌN</span><strong id="dashboard-symbol">—</strong><span id="dashboard-latest-date" class="muted">Dữ liệu mới nhất: —</span></div>
+      <div class="summary-stat panel"><span>Close</span><strong id="dashboard-close">—</strong><small>nghìn VNĐ</small></div>
+      <div class="summary-stat panel"><span>Thay đổi</span><strong id="dashboard-change" class="neutral">—</strong><small id="dashboard-change-percent">So với phiên trước</small></div>
+      <div class="summary-stat panel"><span>Day High / Low</span><strong id="dashboard-high-low">—</strong><small>nghìn VNĐ</small></div>
+      <div class="summary-stat panel"><span>Volume</span><strong id="dashboard-volume">—</strong><small>khối lượng</small></div>
+      <div class="summary-stat panel"><span>Khoảng dữ liệu</span><strong id="dashboard-date-range">—</strong><small id="dashboard-session-count">—</small></div>
+    </section>
+
+    <div class="dashboard-main-grid">
+      <section class="panel chart-panel dashboard-chart-panel" aria-labelledby="dashboard-chart-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">PRICE HISTORY</p><h2 id="dashboard-chart-title">Giá đóng cửa</h2><p class="muted">Đơn vị: nghìn VNĐ · hover để xem chi tiết OHLCV</p></div>
+          <div class="periods" aria-label="Khoảng thời gian biểu đồ">
+            <button data-period="7">7D</button>
+            <button data-period="30" class="active">30D</button>
+            <button data-period="90">90D</button>
+          </div>
         </div>
+        <p id="ohlcv-status" class="status" aria-live="polite">Chọn một mã để tải dữ liệu.</p>
+        <div id="chart" class="chart echarts-chart" role="img" aria-label="Biểu đồ giá đóng cửa"></div>
+        <div id="chart-table-alternative" class="sr-only" aria-live="polite">Dữ liệu biểu đồ được trình bày trong bảng OHLCV bên dưới.</div>
+      </section>
+
+      <aside class="panel watchlist-panel" aria-labelledby="watchlist-title">
+        <div class="section-heading"><div><p class="eyebrow">WATCHLIST</p><h2 id="watchlist-title">Mã có dữ liệu</h2></div><span id="watchlist-count" class="count-badge">0</span></div>
+        <input id="watchlist-filter" class="watchlist-filter" type="search" placeholder="Lọc danh sách…" aria-label="Lọc danh sách mã">
+        <p id="watchlist-status" class="status" aria-live="polite">Đang tải…</p>
+        <ul id="symbols-list" class="watchlist-list" aria-label="Danh sách mã có dữ liệu"></ul>
+      </aside>
+    </div>
+
+    <section class="panel table-panel" aria-labelledby="dashboard-table-title">
+      <div class="section-heading table-heading">
+        <div><p class="eyebrow">RECENT DATA</p><h2 id="dashboard-table-title">Lịch sử OHLCV</h2><p class="muted">Mới nhất trước · giá theo nghìn VNĐ</p></div>
+        <button id="toggle-table" class="secondary-button" type="button" hidden>Xem thêm</button>
       </div>
-      <p id="ohlcv-status" class="status" aria-live="polite">Chọn một mã để tải dữ liệu.</p>
-      <div id="chart" class="chart" role="img" aria-label="Biểu đồ đường giá đóng cửa"></div>
-      <dl class="latest-data">
-        <div><dt>Ngày gần nhất</dt><dd id="latest-date">—</dd></div>
-        <div><dt>Giá đóng cửa</dt><dd id="latest-close">—</dd></div>
-        <div><dt>Khối lượng</dt><dd id="latest-volume">—</dd></div>
-      </dl>
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Ngày</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th></tr></thead>
+          <tbody id="ohlcv-table"></tbody>
+        </table>
+      </div>
     </section>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
   <script src="/assets/js/app.js"></script>
 </body>
 </html>
